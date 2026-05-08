@@ -2195,8 +2195,601 @@ if (typeof pdfjsLib !== 'undefined') {
 let extractedData = [];
 let currentFileName = '';
 
-// ---- REGEX PATTERNS for lab values ----
+// ══════════════════════════════════════════════════════════
+//  CATEGORY DEFINITIONS  — defines destination for every key
+// ══════════════════════════════════════════════════════════
+const CAT_META = {
+  inr:     { label: 'INR Log',               icon: '💉', dest: 'inr',        color: 'rgba(46,196,182,0.15)',   borderColor: 'rgba(46,196,182,0.4)',  textColor: 'var(--teal2)',  typeKey: null },
+  coag:    { label: 'INR Log (Coagulation)',  icon: '💉', dest: 'inr',        color: 'rgba(46,196,182,0.1)',    borderColor: 'rgba(46,196,182,0.3)',  textColor: 'var(--teal)',   typeKey: null },
+  echo:    { label: 'Cardiac → Echo',         icon: '🫀', dest: 'cardiac',    color: 'rgba(224,92,92,0.12)',    borderColor: 'rgba(224,92,92,0.35)',  textColor: '#ff9090',       typeKey: 'Echo' },
+  ecg:     { label: 'Cardiac → ECG',          icon: '📊', dest: 'cardiac',    color: 'rgba(91,155,213,0.12)',   borderColor: 'rgba(91,155,213,0.35)', textColor: 'var(--blue2)',  typeKey: 'ECG' },
+  cardiac: { label: 'Cardiac Tests',          icon: '🫀', dest: 'cardiac',    color: 'rgba(224,92,92,0.1)',     borderColor: 'rgba(224,92,92,0.3)',   textColor: '#ff9090',       typeKey: 'Other' },
+  cbc:     { label: 'Blood Tests → CBC',      icon: '🩸', dest: 'bloodtests', color: 'rgba(224,92,92,0.08)',    borderColor: 'rgba(200,60,60,0.3)',   textColor: 'var(--red2)',   typeKey: 'CBC' },
+  lft:     { label: 'Blood Tests → LFT',      icon: '🩸', dest: 'bloodtests', color: 'rgba(232,180,90,0.08)',   borderColor: 'rgba(232,180,90,0.3)',  textColor: 'var(--gold2)',  typeKey: 'LFT' },
+  kft:     { label: 'Blood Tests → KFT',      icon: '🩸', dest: 'bloodtests', color: 'rgba(232,180,90,0.1)',    borderColor: 'rgba(232,180,90,0.35)', textColor: 'var(--gold)',   typeKey: 'KFT' },
+  lipid:   { label: 'Blood Tests → Lipid',    icon: '🩸', dest: 'bloodtests', color: 'rgba(154,184,212,0.1)',   borderColor: 'rgba(154,184,212,0.3)', textColor: 'var(--blue2)',  typeKey: 'Lipid' },
+  sugar:   { label: 'Blood Tests → Sugar',    icon: '🩸', dest: 'bloodtests', color: 'rgba(232,180,90,0.07)',   borderColor: 'rgba(232,180,90,0.25)', textColor: 'var(--gold2)',  typeKey: 'Other' },
+  thyroid: { label: 'Blood Tests → Thyroid',  icon: '🩸', dest: 'bloodtests', color: 'rgba(154,184,212,0.08)',  borderColor: 'rgba(154,184,212,0.25)',textColor: 'var(--text2)',  typeKey: 'Other' },
+  elec:    { label: 'Blood Tests → Electrolytes', icon:'🩸', dest:'bloodtests',color:'rgba(76,175,130,0.08)',   borderColor:'rgba(76,175,130,0.25)', textColor:'var(--green2)',  typeKey: 'Other' },
+  vitals:  { label: 'Vitals',                 icon: '📋', dest: 'vitals',     color: 'rgba(46,196,182,0.06)',   borderColor: 'rgba(46,196,182,0.2)', textColor: 'var(--teal)',   typeKey: null },
+};
+
+// ══════════════════════════════════════════════════════════
+//  REGEX PATTERN LIBRARY
+// ══════════════════════════════════════════════════════════
 const LAB_PATTERNS = [
+  // ── INR / Coagulation ──
+  { key:'INR',   label:'INR Value',              unit:'',       category:'inr',
+    patterns:[/\bINR\b[\s:=\-–]+(\d+\.?\d*)/i, /PT[\s\/]+INR[\s:=\-–]+(\d+\.?\d*)/i, /International\s+Normalised\s+Ratio[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'PT',    label:'PT (Prothrombin Time)',   unit:'sec',    category:'coag',
+    patterns:[/Prothrombin\s+Time[\s:=\-–]+(\d+\.?\d*)/i, /\bPT\b[\s:=\-–]+(\d+\.?\d*)\s*s/i] },
+  { key:'APTT',  label:'aPTT',                   unit:'sec',    category:'coag',
+    patterns:[/a?PTT[\s:=\-–]+(\d+\.?\d*)/i, /Activated\s+Partial[\s\w]+Time[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── CBC ──
+  { key:'HGB',  label:'Hemoglobin (Hb)',          unit:'g/dL',   category:'cbc',
+    patterns:[/Hemo?globin\b[\s:=\-–]+(\d+\.?\d*)/i, /\bHb\b[\s:=\-–]+(\d+\.?\d*)/i, /\bHGB\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'WBC',  label:'WBC / TLC',                unit:'×10³/µL',category:'cbc',
+    patterns:[/(?:WBC|Total\s+Leuco(?:cytes?)?|TLC)[\s:=\-–]+(\d+\.?\d*)/i, /White\s+Blood\s+Cell[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'PLT',  label:'Platelets',                unit:'×10³/µL',category:'cbc',
+    patterns:[/Platelet[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i, /\bPLT\b[\s:=\-–]+(\d+\.?\d*)/i, /\bThrombocytes?\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'RBC',  label:'RBC Count',                unit:'M/µL',   category:'cbc',
+    patterns:[/RBC[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i, /Red\s+Blood\s+Cell[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'PCV',  label:'PCV / Hematocrit',         unit:'%',      category:'cbc',
+    patterns:[/(?:PCV|Haematocrit|Hematocrit|HCT)\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'MCV',  label:'MCV',                      unit:'fL',     category:'cbc',
+    patterns:[/\bMCV\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'MCH',  label:'MCH',                      unit:'pg',     category:'cbc',
+    patterns:[/\bMCH\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'MCHC', label:'MCHC',                     unit:'g/dL',   category:'cbc',
+    patterns:[/\bMCHC\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'ESR',  label:'ESR',                      unit:'mm/hr',  category:'cbc',
+    patterns:[/\bESR\b[\s:=\-–]+(\d+\.?\d*)/i, /Erythrocyte\s+Sed[\w\s]*Rate[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'NEUT', label:'Neutrophils',              unit:'%',      category:'cbc',
+    patterns:[/Neutro?phils?[\s:=\-–]+(\d+\.?\d*)/i, /\bNeut[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'LYMP', label:'Lymphocytes',              unit:'%',      category:'cbc',
+    patterns:[/Lymphocytes?[\s:=\-–]+(\d+\.?\d*)/i, /\bLymp?h[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── LFT ──
+  { key:'SGPT', label:'SGPT / ALT',               unit:'U/L',    category:'lft',
+    patterns:[/(?:SGPT|ALT|Alanine[\s\w]*Transaminase)[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'SGOT', label:'SGOT / AST',               unit:'U/L',    category:'lft',
+    patterns:[/(?:SGOT|AST|Aspartate[\s\w]*Transaminase)[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'TBIL', label:'Total Bilirubin',           unit:'mg/dL',  category:'lft',
+    patterns:[/Total\s+Bilirubin[\s:=\-–]+(\d+\.?\d*)/i, /\bT\.?Bil\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'DBIL', label:'Direct Bilirubin',          unit:'mg/dL',  category:'lft',
+    patterns:[/Direct\s+Bilirubin[\s:=\-–]+(\d+\.?\d*)/i, /\bD\.?Bil\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'ALP',  label:'Alk. Phosphatase (ALP)',    unit:'U/L',    category:'lft',
+    patterns:[/Alkaline\s+Phosphatase[\s:=\-–]+(\d+\.?\d*)/i, /\bALP\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'GGT',  label:'GGT',                       unit:'U/L',    category:'lft',
+    patterns:[/\bGGT\b[\s:=\-–]+(\d+\.?\d*)/i, /Gamma[\s\-]?GT[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'TPROT',label:'Total Protein',             unit:'g/dL',   category:'lft',
+    patterns:[/Total\s+Protein[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'ALB',  label:'Albumin',                   unit:'g/dL',   category:'lft',
+    patterns:[/\bAlbumin\b[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── KFT ──
+  { key:'CREAT',label:'Serum Creatinine',          unit:'mg/dL',  category:'kft',
+    patterns:[/Serum\s+Creatinine[\s:=\-–]+(\d+\.?\d*)/i, /\bCreatinine\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'UREA', label:'Blood Urea / BUN',          unit:'mg/dL',  category:'kft',
+    patterns:[/Blood\s+Urea[\s:=\-–]+(\d+\.?\d*)/i, /\bBUN\b[\s:=\-–]+(\d+\.?\d*)/i, /Serum\s+Urea[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'URIC', label:'Uric Acid',                 unit:'mg/dL',  category:'kft',
+    patterns:[/Uric\s+Acid[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'eGFR', label:'eGFR',                      unit:'mL/min', category:'kft',
+    patterns:[/eGFR[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── Lipid ──
+  { key:'TCHOL',label:'Total Cholesterol',         unit:'mg/dL',  category:'lipid',
+    patterns:[/Total\s+Cholesterol[\s:=\-–]+(\d+\.?\d*)/i, /Cholesterol[\s,\-–:]+Total[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'LDL',  label:'LDL Cholesterol',           unit:'mg/dL',  category:'lipid',
+    patterns:[/LDL[\s\-–\w]*Cholesterol[\s:=\-–]+(\d+\.?\d*)/i, /\bLDL\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'HDL',  label:'HDL Cholesterol',           unit:'mg/dL',  category:'lipid',
+    patterns:[/HDL[\s\-–\w]*Cholesterol[\s:=\-–]+(\d+\.?\d*)/i, /\bHDL\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'TGL',  label:'Triglycerides',             unit:'mg/dL',  category:'lipid',
+    patterns:[/Triglyceride[\s:=\-–]+(\d+\.?\d*)/i, /\bTGL\b[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'VLDL', label:'VLDL',                      unit:'mg/dL',  category:'lipid',
+    patterns:[/\bVLDL\b[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── Blood Sugar ──
+  { key:'FBS',   label:'Blood Sugar Fasting',      unit:'mg/dL',  category:'sugar',
+    patterns:[/(?:Fasting|FBS|FPG)[\s\w]*(?:Blood\s+Sugar|Glucose)[\s:=\-–]+(\d+\.?\d*)/i, /Blood\s+Sugar[\s\w]*Fasting[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'PPBS',  label:'Post Prandial Sugar',      unit:'mg/dL',  category:'sugar',
+    patterns:[/(?:Post[\s\-]Prandial|PPBS|PP\s+Blood\s+Sugar|2\s*hr[\s\w]*glucose)[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'HBA1C', label:'HbA1c',                    unit:'%',      category:'sugar',
+    patterns:[/HbA1?c[\s:=\-–]+(\d+\.?\d*)/i, /Glycated\s+Hemo[\s\w]*[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── Electrolytes ──
+  { key:'NA',   label:'Sodium (Na)',               unit:'mEq/L',  category:'elec',
+    patterns:[/\bSodium\b[\s:=\-–]+(\d+\.?\d*)/i, /\bNa\+?[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'K',    label:'Potassium (K)',             unit:'mEq/L',  category:'elec',
+    patterns:[/\bPotassium\b[\s:=\-–]+(\d+\.?\d*)/i, /\bK\+?[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'CL',   label:'Chloride (Cl)',             unit:'mEq/L',  category:'elec',
+    patterns:[/\bChloride\b[\s:=\-–]+(\d+\.?\d*)/i, /\bCl\-?[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── Thyroid ──
+  { key:'TSH', label:'TSH',                        unit:'µIU/mL', category:'thyroid',
+    patterns:[/\bTSH\b[\s:=\-–]+(\d+\.?\d*)/i, /Thyroid\s+Stimulating[\s\w]*[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'T3',  label:'T3 (Total)',                 unit:'ng/dL',  category:'thyroid',
+    patterns:[/\bT3\b[\s:=\-–]+(\d+\.?\d*)/i, /Tri[\s\-]?iodothyronine[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'T4',  label:'T4 / Thyroxine',             unit:'µg/dL',  category:'thyroid',
+    patterns:[/\bT4\b[\s:=\-–]+(\d+\.?\d*)/i, /\bThyroxine\b[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── Echo parameters ──
+  { key:'EF',     label:'Ejection Fraction (EF%)', unit:'%',      category:'echo',
+    patterns:[/(?:EF|Ejection\s+Fraction)[\s:=\-–]+(\d+\.?\d*)\s*%?/i, /LVEF[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'LVIDD',  label:'LVIDd (diastole)',        unit:'mm',     category:'echo',
+    patterns:[/LVIDd[\s:=\-–]+(\d+\.?\d*)/i, /LV\s+Internal\s+Dia[\w\s]*Diastole[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'LVIDS',  label:'LVIDs (systole)',         unit:'mm',     category:'echo',
+    patterns:[/LVIDs[\s:=\-–]+(\d+\.?\d*)/i, /LV\s+Internal\s+Dia[\w\s]*Systole[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'FS',     label:'Fractional Shortening',   unit:'%',      category:'echo',
+    patterns:[/(?:\bFS\b|Fractional\s+Shortening)[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'LA',     label:'Left Atrium (LA)',         unit:'mm',     category:'echo',
+    patterns:[/\bLA\b[\s:=\-–]+(\d+\.?\d*)/i, /Left\s+Atrium[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'AO',     label:'Aorta Root',              unit:'mm',     category:'echo',
+    patterns:[/\bAo\b[\s:=\-–]+(\d+\.?\d*)/i, /Aortic?\s+Root[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'IVSD',   label:'IVS Diastole',            unit:'mm',     category:'echo',
+    patterns:[/IVSd[\s:=\-–]+(\d+\.?\d*)/i, /Inter[\s\-]?ventricular\s+Septum[\s\w]*[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'LVPWD',  label:'LVPW Diastole',           unit:'mm',     category:'echo',
+    patterns:[/LVPWd[\s:=\-–]+(\d+\.?\d*)/i, /LV\s+Posterior\s+Wall[\s\w]*[\s:=\-–]+(\d+\.?\d*)/i] },
+
+  // ── ECG parameters ──
+  { key:'ECG_HR', label:'Heart Rate (ECG)',        unit:'bpm',    category:'ecg',
+    patterns:[/(?:Heart\s+Rate|Ventricular\s+Rate|HR)[\s:=\-–]+(\d{2,3})\s*(?:bpm|\/min)?/i] },
+  { key:'ECG_PR', label:'PR Interval',             unit:'ms',     category:'ecg',
+    patterns:[/PR[\s\-]?Interval[\s:=\-–]+(\d+\.?\d*)/i, /\bPR\b[\s:=\-–]+(\d+)\s*ms/i] },
+  { key:'ECG_QRS',label:'QRS Duration',            unit:'ms',     category:'ecg',
+    patterns:[/QRS[\s\-]?(?:Duration|Width|Complex)[\s:=\-–]+(\d+\.?\d*)/i, /\bQRS\b[\s:=\-–]+(\d+)\s*ms/i] },
+  { key:'ECG_QTC',label:'QTc Interval',            unit:'ms',     category:'ecg',
+    patterns:[/QTc[\s\-]?(?:Interval)?[\s:=\-–]+(\d+\.?\d*)/i] },
+  { key:'ECG_AX', label:'QRS Axis',                unit:'°',      category:'ecg',
+    patterns:[/(?:QRS\s+)?Axis[\s:=\-–]+([+-]?\d+)/i] },
+
+  // ── Vitals ──
+  { key:'SBP', label:'BP Systolic',                unit:'mmHg',   category:'vitals',
+    patterns:[/(?:BP|Blood\s+Pressure)[\s:=\-–]+(\d{2,3})\s*[\/\-]\s*\d{2,3}/i] },
+  { key:'HR_VITALS',label:'Heart Rate / Pulse',   unit:'bpm',    category:'vitals',
+    patterns:[/(?:Pulse\s+Rate|Heart\s+Rate)[\s:=\-–]+(\d{2,3})\s*(?:bpm|\/min)?/i] },
+  { key:'SpO2',label:'SpO2',                       unit:'%',      category:'vitals',
+    patterns:[/Sp\s*O2[\s:=\-–]+(\d+\.?\d*)/i, /Oxygen\s+Saturation[\s:=\-–]+(\d+\.?\d*)/i] },
+];
+
+// ── Text-only ECG findings patterns (non-numeric) ──
+const ECG_TEXT_PATTERNS = [
+  { key:'ECG_RHYTHM', label:'Rhythm',
+    patterns:[/(Sinus\s+(?:Rhythm|Bradycardia|Tachycardia|Arrhythmia)[\w\s,]*)/i,
+              /(Atrial\s+(?:Fibrillation|Flutter|Tachycardia)[\w\s,]*)/i,
+              /(Normal\s+Sinus\s+Rhythm[\w\s,]*)/i,
+              /((?:Left|Right)\s+Bundle\s+Branch\s+Block[\w\s,]*)/i] },
+  { key:'ECG_INTERP', label:'ECG Interpretation',
+    patterns:[/(Normal\s+ECG[\w\s,\.]*)/i,
+              /(Left\s+Ventricular\s+Hypertrophy[\w\s,]*)/i,
+              /(ST[\s\-](?:elevation|depression|changes?)[\w\s,]*)/i] },
+];
+
+// ── Echo text findings ──
+const ECHO_TEXT_PATTERNS = [
+  { key:'ECHO_VALVE', label:'Valve Status',
+    patterns:[/((?:Aortic|Mitral|Tricuspid|Pulmonary)\s+valve[\w\s,\.]*(?:normal|mild|moderate|severe|regurgitation|stenosis|mechanical|prosthetic)[\w\s,\.]*)/i] },
+  { key:'ECHO_WALL', label:'Wall Motion',
+    patterns:[/((?:Normal|Abnormal|Hypokinesia|Akinesia)\s+(?:wall\s+motion|regional[\w\s]*)[\w\s,\.]*)/i,
+              /(wall\s+motion[\w\s,\.]*(?:normal|abnormal|hypokinetic)[\w\s,\.]*)/i] },
+  { key:'ECHO_EFFUSION', label:'Pericardial Effusion',
+    patterns:[/((?:No|Mild|Moderate|Severe|Trivial)\s+pericardial\s+effusion[\w\s,\.]*)/i,
+              /(pericardial\s+effusion[\s:]+(?:present|absent|none|mild|moderate)[\w\s,\.]*)/i] },
+];
+
+async function extractTextFromPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    fullText += content.items.map(i => i.str).join(' ') + '\n';
+    setProgress(30 + (p / pdf.numPages) * 40);
+  }
+  return fullText;
+}
+
+async function extractTextFromImage(file) {
+  setStatus('Preprocessing image…');
+  setProgress(20);
+  const bmp = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(1, 2400 / bmp.width);
+  canvas.width  = Math.round(bmp.width  * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+    g = g < 128 ? Math.max(0, g * 0.75) : Math.min(255, g * 1.1 + 20);
+    d[i] = d[i+1] = d[i+2] = g;
+  }
+  ctx.putImageData(id, 0, 0);
+  setStatus('Running OCR — this may take 20–40 seconds…');
+  setProgress(30);
+  try {
+    const worker = await Tesseract.createWorker('eng', 1, {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          setProgress(30 + Math.round(m.progress * 50));
+          setStatus(`OCR in progress… ${Math.round(m.progress * 100)}%`);
+        }
+      }
+    });
+    await worker.setParameters({
+      tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,:/()+-%\n ',
+      preserve_interword_spaces: '1',
+    });
+    const { data: { text } } = await worker.recognize(canvas);
+    await worker.terminate();
+    setProgress(85);
+    return text;
+  } catch(err) {
+    return `[OCR error: ${err.message}. Please enter values manually below.]`;
+  }
+}
+
+function parseLabValues(text) {
+  const found = [];
+  const usedKeys = new Set();
+  // Numeric patterns
+  for (const p of LAB_PATTERNS) {
+    if (usedKeys.has(p.key)) continue;
+    for (const rx of p.patterns) {
+      const m = text.match(rx);
+      if (m && m[1]) {
+        const val = parseFloat(m[1]);
+        if (!isNaN(val) && val > 0 && val < 99999) {
+          found.push({ key:p.key, label:p.label, unit:p.unit, value:val, category:p.category, auto:true, textVal:null });
+          usedKeys.add(p.key);
+          break;
+        }
+      }
+    }
+  }
+  // Text-only patterns (ECG rhythm, Echo findings)
+  for (const p of [...ECG_TEXT_PATTERNS, ...ECHO_TEXT_PATTERNS]) {
+    if (usedKeys.has(p.key)) continue;
+    for (const rx of p.patterns) {
+      const m = text.match(rx);
+      if (m && m[1] && m[1].trim().length > 3) {
+        found.push({ key:p.key, label:p.label, unit:'', value:null, category: p.key.startsWith('ECG') ? 'ecg' : 'echo', auto:true, textVal:m[1].trim().slice(0,100) });
+        usedKeys.add(p.key);
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+function detectReportType(text, values) {
+  const t = text.toLowerCase();
+  const cats = values.map(v => v.category);
+  if (cats.includes('ecg') || /\becg\b|\bekg\b|electrocardiogram/i.test(t)) return 'ECG / Electrocardiogram';
+  if (cats.includes('echo') || /echocardiogram|2d echo|doppler echo/i.test(t)) return 'Echocardiogram (2D Echo)';
+  if (cats.includes('inr') || /coagulation|prothrombin|inr/i.test(t)) return 'INR / Coagulation';
+  if (cats.includes('cbc') || /haemogram|complete blood|CBC/i.test(t)) return 'CBC (Complete Blood Count)';
+  if (cats.includes('lft') || /liver function/i.test(t)) return 'LFT (Liver Function)';
+  if (cats.includes('kft') || /kidney function|renal function/i.test(t)) return 'KFT (Kidney Function)';
+  if (cats.includes('lipid') || /lipid profile/i.test(t)) return 'Lipid Profile';
+  if (cats.includes('thyroid') || /thyroid function/i.test(t)) return 'Thyroid Function';
+  if (cats.includes('sugar') || /blood sugar|diabetes|hba1c/i.test(t)) return 'Blood Sugar';
+  if (cats.includes('elec') || /electrolyte/i.test(t)) return 'Electrolytes';
+  return 'Lab Report';
+}
+
+function detectReportDate(text) {
+  const patterns = [
+    /(?:Date|Report\s+Date|Collected|Received|Reported)[\s:=\-–]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/,
+    /(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/
+  ];
+  for (const rx of patterns) {
+    const m = text.match(rx);
+    if (m) {
+      try {
+        let d;
+        if (m[0].match(/\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/)) {
+          d = new Date(m[0]);
+        } else {
+          const parts = m[0].replace(/[^\d]/g, '-').split('-');
+          if (parts[2] && parts[2].length === 4)
+            d = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`);
+          else d = new Date(m[0]);
+        }
+        if (!isNaN(d)) return d.toISOString().split('T')[0];
+      } catch(e) {}
+    }
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
+function detectLabName(text) {
+  const m = text.match(/(?:Lab(?:oratory)?|Centre|Center|Hospital|Diagnostics?|Path(?:ology)?)\s*(?:Name|:)?\s*[:\-]?\s*([A-Za-z\s&\.]+?)(?:\n|,|Ph|Tel|Mob)/i);
+  return m ? m[1].trim().slice(0, 40) : '';
+}
+
+function setProgress(pct) { document.getElementById('uploadProgressFill').style.width = pct + '%'; }
+function setStatus(msg)   { document.getElementById('uploadStatusText').textContent = msg; }
+
+async function processReport(file) {
+  currentFileName = file.name;
+  document.getElementById('uploadStatus').style.display = 'block';
+  document.getElementById('extractedResults').style.display = 'none';
+  setProgress(5);
+  setStatus('Reading file…');
+
+  try {
+    let text = '';
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (isPDF) {
+      setStatus('Extracting text from PDF…');
+      setProgress(15);
+      text = await extractTextFromPDF(file);
+    } else {
+      text = await extractTextFromImage(file);
+    }
+
+    setProgress(75);
+    setStatus('Matching lab values…');
+    await new Promise(r => setTimeout(r, 200));
+
+    const values      = parseLabValues(text);
+    const reportType  = detectReportType(text, values);
+    const reportDate  = detectReportDate(text);
+    const labName     = detectLabName(text);
+
+    setProgress(100);
+    setStatus('Done ✓');
+    await new Promise(r => setTimeout(r, 350));
+    document.getElementById('uploadStatus').style.display = 'none';
+
+    DB.push('uploadHistory', { id: Date.now(), filename: file.name, reportType, date: reportDate, valuesFound: values.length, timestamp: new Date().toISOString() });
+    renderUploadHistory();
+
+    extractedData = values.map(v => ({ ...v, reportDate, reportType, labName, confirmed: true }));
+    renderExtractedResults(values, reportType, reportDate, labName, text.slice(0, 1500));
+  } catch (err) {
+    document.getElementById('uploadStatus').style.display = 'none';
+    showToast('❌ Error reading file: ' + err.message);
+    console.error(err);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER — grouped by destination category
+// ══════════════════════════════════════════════════════════
+function renderExtractedResults(values, reportType, reportDate, labName, rawText) {
+  document.getElementById('extractedResults').style.display = 'block';
+  document.getElementById('rawExtractedText').textContent = rawText || '—';
+
+  const grid = document.getElementById('extractedGrid');
+
+  // Group all extracted items by category
+  const groups = {};
+  extractedData.forEach((item, i) => {
+    const cat = item.category || 'other';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push({ ...item, _idx: i });
+  });
+
+  // Report header
+  let html = `
+    <div style="grid-column:1/-1;background:linear-gradient(135deg,rgba(46,196,182,0.1),rgba(46,196,182,0.03));border:1px solid rgba(46,196,182,0.3);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:600;color:var(--teal2)">📄 ${escHtml(reportType)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.6">
+        📅 Report Date: <strong style="color:var(--text2)">${formatDate(reportDate)}</strong>
+        ${labName ? ` &nbsp;·&nbsp; 🏥 ${escHtml(labName)}` : ''}
+        &nbsp;·&nbsp; 📁 ${escHtml(currentFileName)}
+        &nbsp;·&nbsp; <strong style="color:var(--teal)">${values.length} value(s) detected</strong>
+      </div>
+      ${values.length === 0 ? '<div style="margin-top:8px;font-size:12px;color:var(--gold2);padding:6px 8px;background:rgba(232,180,90,0.08);border-radius:6px">⚠️ No values auto-detected. This may be a scan with unclear text. Review the raw text below and enter values manually.</div>' : ''}
+    </div>`;
+
+  // Render each category group
+  const catOrder = ['inr','coag','echo','ecg','cardiac','cbc','lft','kft','lipid','sugar','thyroid','elec','vitals'];
+  const renderedCats = new Set();
+
+  for (const cat of [...catOrder, ...Object.keys(groups)]) {
+    if (renderedCats.has(cat) || !groups[cat]) continue;
+    renderedCats.add(cat);
+    const meta  = CAT_META[cat] || { label: cat.toUpperCase(), icon:'📋', color:'rgba(99,160,210,0.08)', borderColor:'var(--border2)', textColor:'var(--text2)' };
+    const items = groups[cat];
+
+    html += `
+      <div style="grid-column:1/-1;margin-top:10px;margin-bottom:2px">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:${meta.color};border:1px solid ${meta.borderColor};border-radius:8px">
+          <span style="font-size:16px">${meta.icon}</span>
+          <span style="font-size:12px;font-weight:700;color:${meta.textColor};letter-spacing:0.5px">${meta.label}</span>
+          <span style="font-size:10px;color:var(--text3);margin-left:auto">${items.length} field(s) → will save to <strong style="color:${meta.textColor}">${meta.dest === 'inr' ? 'INR Log' : meta.dest === 'cardiac' ? 'Cardiac Tests' : meta.dest === 'bloodtests' ? 'Blood Tests' : 'Vitals'}</strong></span>
+        </div>
+      </div>`;
+
+    items.forEach(item => {
+      const isText = item.textVal !== null;
+      if (isText) {
+        // Text-type field (rhythm, interpretation etc.)
+        html += `
+          <div class="extracted-item confirmed" style="border-color:${meta.borderColor}">
+            <span class="extracted-badge badge-auto">Auto</span>
+            <div class="extracted-item-label">${escHtml(item.label)}</div>
+            <input class="extracted-item-input" type="text" id="exVal_${item._idx}"
+              value="${escHtml(item.textVal)}" placeholder="Finding text">
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Text finding</div>
+          </div>`;
+      } else {
+        // Numeric field
+        html += `
+          <div class="extracted-item ${item.auto ? 'confirmed' : ''}" style="border-color:${meta.borderColor}">
+            <span class="extracted-badge ${item.auto ? 'badge-auto' : 'badge-manual'}">${item.auto ? 'Auto' : 'Manual'}</span>
+            <div class="extracted-item-label">${escHtml(item.label)}</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input class="extracted-item-input" type="number" step="any" id="exVal_${item._idx}"
+                value="${item.value !== null && item.value !== '' ? item.value : ''}"
+                placeholder="Enter value" style="flex:1">
+              ${item.unit ? `<span style="font-size:10px;color:var(--text3);flex-shrink:0">${escHtml(item.unit)}</span>` : ''}
+            </div>
+          </div>`;
+      }
+    });
+  }
+
+  // Manual add rows for missing key categories
+  const missingManual = [];
+  if (!groups['inr'] && !groups['coag']) missingManual.push({ key:'INR_MAN', label:'INR Value', unit:'', category:'inr', value:'', auto:false, textVal:null });
+  if (!groups['echo']) missingManual.push({ key:'EF_MAN', label:'EF% (Echo)', unit:'%', category:'echo', value:'', auto:false, textVal:null });
+
+  if (missingManual.length) {
+    html += `<div style="grid-column:1/-1;margin-top:10px;font-size:11px;color:var(--text3);padding:6px 0">➕ Not detected — enter manually if applicable:</div>`;
+    missingManual.forEach(item => {
+      const startIdx = extractedData.length;
+      extractedData.push({ ...item, reportDate: extractedData[0]?.reportDate || new Date().toISOString().split('T')[0], reportType: extractedData[0]?.reportType || 'Lab Report', labName: '', confirmed: false });
+      const meta = CAT_META[item.category] || {};
+      html += `
+        <div class="extracted-item" style="opacity:0.7;border-color:${meta.borderColor||'var(--border)'}">
+          <span class="extracted-badge badge-manual">Manual</span>
+          <div class="extracted-item-label">${escHtml(item.label)}</div>
+          <input class="extracted-item-input" type="number" step="any" id="exVal_${startIdx}" value="" placeholder="Leave blank to skip">
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">${item.unit} · ${(meta.label||'').toUpperCase()}</div>
+        </div>`;
+    });
+  }
+
+  grid.innerHTML = html;
+  document.getElementById('extractedResults').scrollIntoView({ behavior: 'smooth' });
+  showToast(values.length > 0 ? `✅ ${values.length} value(s) extracted — grouped by category` : '⚠️ No values auto-detected — enter manually');
+}
+
+// ══════════════════════════════════════════════════════════
+//  SAVE — route each group to its correct section
+// ══════════════════════════════════════════════════════════
+function saveAllExtracted() {
+  const today = new Date().toISOString().split('T')[0];
+  let savedSections = [];
+
+  // Read current input values back into extractedData
+  extractedData.forEach((item, i) => {
+    const el = document.getElementById('exVal_' + i);
+    if (!el) return;
+    if (item.textVal !== null) {
+      item.textVal = el.value.trim();
+    } else {
+      const v = parseFloat(el.value);
+      item.value = isNaN(v) ? null : v;
+    }
+  });
+
+  const reportDate = extractedData[0]?.reportDate || today;
+  const labName    = extractedData[0]?.labName    || currentFileName;
+  const reportType = extractedData[0]?.reportType || 'Lab Report';
+
+  // ── 1. INR Log ─────────────────────────────────────────
+  const inrItems = extractedData.filter(i => (i.category === 'inr' || i.category === 'coag') && i.value > 0);
+  if (inrItems.length) {
+    const inrVal = inrItems.find(i => i.key === 'INR' || i.key === 'INR_MAN')?.value;
+    if (inrVal) {
+      const ptVal  = inrItems.find(i => i.key === 'PT')?.value;
+      const aptt   = inrItems.find(i => i.key === 'APTT')?.value;
+      const notes  = [ptVal ? `PT: ${ptVal}s` : '', aptt ? `aPTT: ${aptt}s` : ''].filter(Boolean).join(' · ');
+      DB.push('inr', { id: Date.now(), date: reportDate, value: inrVal, dose: '', lab: labName, instruction: notes || `Auto-extracted from ${currentFileName}` });
+      savedSections.push('INR Log');
+    } else if (inrItems.length) {
+      // Only PT/aPTT, no INR — save as coagulation blood test
+      const summary = inrItems.map(i => `${i.label}: ${i.value} ${i.unit}`).join(' | ');
+      DB.push('bloodtests', { id: Date.now(), date: reportDate, type: 'Coagulation Profile', typeKey: 'Other', value: summary, lab: labName, findings: `Auto-extracted from ${currentFileName}` });
+      savedSections.push('Blood Tests (Coag)');
+    }
+  }
+
+  // ── 2. Cardiac Tests: Echo ─────────────────────────────
+  const echoNumeric = extractedData.filter(i => i.category === 'echo' && i.value !== null && i.value > 0);
+  const echoText    = extractedData.filter(i => i.category === 'echo' && i.textVal !== null && i.textVal.length > 2);
+  if (echoNumeric.length || echoText.length) {
+    const efItem = echoNumeric.find(i => i.key === 'EF' || i.key === 'EF_MAN');
+    const params  = echoNumeric.map(i => `${i.label}: ${i.value}${i.unit ? ' '+i.unit : ''}`).join(' | ');
+    const textFindings = echoText.map(i => `${i.label}: ${i.textVal}`).join(' | ');
+    const findings = [params, textFindings].filter(Boolean).join('\n');
+    DB.push('cardiac', {
+      id: Date.now() + 1,
+      date: reportDate,
+      type: 'Echocardiogram (2D Echo)',
+      ef: efItem ? efItem.value : null,
+      hospital: '',
+      doctor: '',
+      findings: findings || `Extracted from ${currentFileName}`,
+      recommendation: ''
+    });
+    savedSections.push('Cardiac → Echo');
+  }
+
+  // ── 3. Cardiac Tests: ECG ──────────────────────────────
+  const ecgNumeric = extractedData.filter(i => i.category === 'ecg' && i.value !== null && i.value > 0);
+  const ecgText    = extractedData.filter(i => i.category === 'ecg' && i.textVal !== null && i.textVal.length > 2);
+  if (ecgNumeric.length || ecgText.length) {
+    const hrItem   = ecgNumeric.find(i => i.key === 'ECG_HR');
+    const params   = ecgNumeric.map(i => `${i.label}: ${i.value}${i.unit ? ' '+i.unit : ''}`).join(' | ');
+    const textFnds = ecgText.map(i => `${i.label}: ${i.textVal}`).join(' | ');
+    const findings = [params, textFnds].filter(Boolean).join('\n');
+    DB.push('cardiac', {
+      id: Date.now() + 2,
+      date: reportDate,
+      type: 'ECG / EKG',
+      ef: null,
+      hospital: '',
+      doctor: '',
+      findings: findings || `ECG extracted from ${currentFileName}`,
+      recommendation: ''
+    });
+    savedSections.push('Cardiac → ECG');
+  }
+
+  // ── 4. Blood Tests — one record per category ───────────
+  const bloodCats = { cbc:'CBC (Complete Blood Count)', lft:'LFT (Liver Function)', kft:'KFT (Kidney Function)', lipid:'Lipid Profile', sugar:'Blood Sugar / HbA1c', thyroid:'Thyroid Function', elec:'Electrolytes' };
+  const bloodTypeKey = { cbc:'CBC', lft:'LFT', kft:'KFT', lipid:'Lipid', sugar:'Other', thyroid:'Other', elec:'Other' };
+
+  for (const [cat, typeLabel] of Object.entries(bloodCats)) {
+    const items = extractedData.filter(i => i.category === cat && i.value !== null && i.value > 0);
+    if (!items.length) continue;
+    const summary = items.map(i => `${i.label}: ${i.value} ${i.unit}`).join(' | ');
+    DB.push('bloodtests', {
+      id: Date.now() + Math.random() * 100,
+      date: reportDate,
+      type: typeLabel,
+      typeKey: bloodTypeKey[cat] || 'Other',
+      value: summary,
+      lab: labName,
+      findings: `Auto-extracted from ${currentFileName}`
+    });
+    savedSections.push(`Blood Tests → ${typeLabel.split('(')[0].trim()}`);
+  }
+
+  if (!savedSections.length) { showToast('⚠️ No values to save — fill in at least one field'); return; }
+
+  // Show detailed success toast
+  showToast(`✅ Saved to: ${savedSections.join(', ')}`);
+  clearExtracted();
+  renderAll();
+  drawINRChart();
+  updateCardiacStats();
+
+  // Navigate to the primary section of the report
+  const primaryDest = extractedData.length > 0
+    ? (savedSections[0].includes('INR') ? 'inr'
+      : savedSections[0].includes('Echo') || savedSections[0].includes('ECG') ? 'cardiac'
+      : 'bloodtests')
+    : null;
+  if (primaryDest) setTimeout(() => showSection(primaryDest), 800);
+}
+
+function clearExtracted() {
+  extractedData = [];
+  document.getElementById('extractedResults').style.display = 'none';
+  document.getElementById('extractedGrid').innerHTML = '';
+}
   // INR / PT
   { key: 'INR', label: 'INR', unit: '', category: 'inr',
     patterns: [/\bINR\b[\s:=\-–]+(\d+\.?\d*)/i, /PT[\s\/]+INR[\s:=\-–]+(\d+\.?\d*)/i, /International Normalised Ratio[\s:=\-–]+(\d+\.?\d*)/i] },
@@ -2318,310 +2911,7 @@ const LAB_PATTERNS = [
     patterns: [/(?:BP|Blood\s+Pressure)[\s:=\-–]+(\d{2,3})[\s\/]+\d{2,3}/i] },
 ];
 
-async function extractTextFromPDF(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let fullText = '';
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-    fullText += content.items.map(i => i.str).join(' ') + '\n';
-    setProgress(30 + (p / pdf.numPages) * 40);
-  }
-  return fullText;
-}
 
-async function extractTextFromImage(file) {
-  setStatus('Preprocessing image…');
-  setProgress(20);
-
-  // ── Pre-process: convert to high-contrast greyscale via canvas ──
-  const bmp = await createImageBitmap(file);
-  const canvas = document.createElement('canvas');
-  // Scale up small images for better OCR accuracy (max 2400px wide)
-  const scale = Math.min(1, 2400 / bmp.width);
-  canvas.width  = Math.round(bmp.width  * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-
-  // Greyscale + contrast boost
-  const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = id.data;
-  for (let i = 0; i < d.length; i += 4) {
-    let g = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-    // Stretch contrast: darken darks, lighten lights
-    g = g < 128 ? Math.max(0, g * 0.75) : Math.min(255, g * 1.1 + 20);
-    d[i] = d[i+1] = d[i+2] = g;
-  }
-  ctx.putImageData(id, 0, 0);
-
-  setStatus('Running OCR — this may take 20–40 seconds…');
-  setProgress(30);
-
-  // ── Tesseract OCR ──
-  try {
-    const worker = await Tesseract.createWorker('eng', 1, {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          const pct = 30 + Math.round(m.progress * 50);
-          setProgress(pct);
-          setStatus(`OCR in progress… ${Math.round(m.progress * 100)}%`);
-        }
-      }
-    });
-    await worker.setParameters({
-      tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,:/()+-%\n ',
-      preserve_interword_spaces: '1',
-    });
-    const { data: { text } } = await worker.recognize(canvas);
-    await worker.terminate();
-    setProgress(85);
-    return text;
-  } catch(err) {
-    // Fallback — return raw canvas attempt note
-    return `[OCR error: ${err.message}. Please enter values manually below.]`;
-  }
-}
-
-function parseLabValues(text) {
-  const found = [];
-  const usedKeys = new Set();
-  for (const p of LAB_PATTERNS) {
-    if (usedKeys.has(p.key)) continue;
-    for (const rx of p.patterns) {
-      const m = text.match(rx);
-      if (m && m[1]) {
-        const val = parseFloat(m[1]);
-        if (!isNaN(val) && val > 0 && val < 99999) {
-          found.push({ key: p.key, label: p.label, unit: p.unit, value: val, category: p.category, auto: true });
-          usedKeys.add(p.key);
-          break;
-        }
-      }
-    }
-  }
-  return found;
-}
-
-function detectReportType(text, values) {
-  const t = text.toLowerCase();
-  const cats = values.map(v => v.category);
-  if (cats.includes('inr') || t.includes('coagulation') || t.includes('prothrombin')) return 'INR / Coagulation';
-  if (cats.includes('cbc') || t.includes('haemogram') || t.includes('complete blood')) return 'CBC (Blood Count)';
-  if (cats.includes('lft') || t.includes('liver function')) return 'LFT (Liver Function)';
-  if (cats.includes('kft') || t.includes('kidney function') || t.includes('renal')) return 'KFT (Kidney Function)';
-  if (cats.includes('lipid') || t.includes('lipid profile') || t.includes('cholesterol')) return 'Lipid Profile';
-  if (cats.includes('cardiac') || t.includes('echocardiogram') || t.includes('ejection fraction')) return 'Echocardiogram';
-  if (cats.includes('thyroid') || t.includes('thyroid')) return 'Thyroid Function';
-  if (cats.includes('sugar') || t.includes('blood sugar') || t.includes('diabetes')) return 'Blood Sugar';
-  return 'General Lab Report';
-}
-
-function detectReportDate(text) {
-  const patterns = [
-    /(?:Date|Report\s+Date|Collected|Received)[\s:=\-–]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
-    /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/,
-    /(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/
-  ];
-  for (const rx of patterns) {
-    const m = text.match(rx);
-    if (m) {
-      try {
-        // Try to build ISO date
-        let d;
-        if (m[0].match(/\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/)) {
-          d = new Date(m[0]);
-        } else {
-          // DD/MM/YYYY → reorder
-          const parts = m[0].replace(/[^\d]/g, '-').split('-');
-          if (parts[2] && parts[2].length === 4) d = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`);
-          else d = new Date(m[0]);
-        }
-        if (!isNaN(d)) return d.toISOString().split('T')[0];
-      } catch(e) {}
-    }
-  }
-  return new Date().toISOString().split('T')[0];
-}
-
-function detectPatientName(text) {
-  const m = text.match(/(?:Patient\s+Name|Name of Patient|Patient)[\s:=\-–]+([A-Za-z\s\.]+?)(?:\n|,|DOB|Age|Sex|M\/F)/i);
-  return m ? m[1].trim() : '';
-}
-
-function setProgress(pct) {
-  document.getElementById('uploadProgressFill').style.width = pct + '%';
-}
-function setStatus(msg) {
-  document.getElementById('uploadStatusText').textContent = msg;
-}
-
-async function processReport(file) {
-  currentFileName = file.name;
-  document.getElementById('uploadStatus').style.display = 'block';
-  document.getElementById('extractedResults').style.display = 'none';
-  setProgress(5);
-  setStatus('Reading file…');
-
-  try {
-    let text = '';
-    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-
-    if (isPDF) {
-      setStatus('Extracting text from PDF…');
-      setProgress(15);
-      text = await extractTextFromPDF(file);
-    } else {
-      setStatus('Processing image file…');
-      setProgress(40);
-      text = await extractTextFromImage(file);
-    }
-
-    setProgress(75);
-    setStatus('Scanning for lab values…');
-    await new Promise(r => setTimeout(r, 300));
-
-    const values = parseLabValues(text);
-    const reportType = detectReportType(text, values);
-    const reportDate = detectReportDate(text);
-    const patientName = detectPatientName(text);
-
-    setProgress(100);
-    setStatus('Done ✓');
-
-    await new Promise(r => setTimeout(r, 400));
-    document.getElementById('uploadStatus').style.display = 'none';
-
-    // Save to upload history
-    DB.push('uploadHistory', {
-      id: Date.now(),
-      filename: file.name,
-      reportType,
-      date: reportDate,
-      valuesFound: values.length,
-      timestamp: new Date().toISOString()
-    });
-    renderUploadHistory();
-
-    // Store for saving
-    extractedData = values.map(v => ({ ...v, reportDate, reportType, confirmed: true }));
-
-    // Add manual entry rows for key items if not found
-    const mustHave = [
-      { key: 'INR_MAN', label: 'INR (manual entry)', unit: '', category: 'inr', value: '', auto: false },
-      { key: 'EF_MAN', label: 'EF% Echo (manual)', unit: '%', category: 'cardiac', value: '', auto: false }
-    ];
-    for (const mh of mustHave) {
-      if (!extractedData.find(v => v.category === mh.category)) {
-        extractedData.push({ ...mh, reportDate, reportType, confirmed: false });
-      }
-    }
-
-    renderExtractedResults(values, reportType, reportDate, text.slice(0, 1200));
-  } catch (err) {
-    document.getElementById('uploadStatus').style.display = 'none';
-    showToast('❌ Error reading file: ' + err.message);
-    console.error(err);
-  }
-}
-
-function renderExtractedResults(values, reportType, reportDate, rawText) {
-  document.getElementById('extractedResults').style.display = 'block';
-  document.getElementById('rawExtractedText').textContent = rawText || '—';
-
-  const grid = document.getElementById('extractedGrid');
-
-  // Report info header
-  const header = `<div style="grid-column:1/-1;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:4px">
-    <div style="font-size:13px;font-weight:600;color:var(--teal2)">📄 ${escHtml(reportType)}</div>
-    <div style="font-size:11px;color:var(--text3);margin-top:3px">Report Date: ${formatDate(reportDate)} · File: ${escHtml(currentFileName)} · ${values.length} value(s) detected</div>
-    ${values.length === 0 ? '<div style="margin-top:6px;font-size:12px;color:var(--gold2)">⚠️ No numeric values auto-detected. Fill manually below.</div>' : ''}
-  </div>`;
-
-  const items = extractedData.map((item, i) => `
-    <div class="extracted-item ${item.auto ? '' : 'manual'}" id="exItem_${i}">
-      <span class="extracted-badge ${item.auto ? 'badge-auto' : 'badge-manual'}">${item.auto ? 'Auto' : 'Manual'}</span>
-      <div class="extracted-item-label">${escHtml(item.label)}</div>
-      <input class="extracted-item-input" type="number" step="any"
-        id="exVal_${i}"
-        value="${item.value !== '' ? item.value : ''}"
-        placeholder="Enter value">
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">${item.unit} · ${escHtml(item.category.toUpperCase())}</div>
-    </div>`).join('');
-
-  grid.innerHTML = header + items;
-
-  // Scroll to results
-  document.getElementById('extractedResults').scrollIntoView({ behavior: 'smooth' });
-  showToast(values.length > 0 ? `✅ ${values.length} value(s) extracted from report` : '⚠️ No values auto-detected — enter manually');
-}
-
-function saveAllExtracted() {
-  let saved = 0;
-  const today = new Date().toISOString().split('T')[0];
-
-  // Collect current input values
-  const toSave = extractedData.map((item, i) => {
-    const input = document.getElementById('exVal_' + i);
-    const val = input ? parseFloat(input.value) : NaN;
-    return { ...item, value: isNaN(val) ? null : val };
-  }).filter(item => item.value !== null && item.value > 0);
-
-  if (!toSave.length) { showToast('⚠️ No values to save'); return; }
-
-  const reportDate = toSave[0]?.reportDate || today;
-  const reportType = toSave[0]?.reportType || 'Lab Report';
-
-  // Separate INR from the rest
-  const inrItem = toSave.find(i => i.category === 'inr' && (i.key === 'INR' || i.key === 'INR_MAN'));
-  const echoItem = toSave.find(i => i.key === 'EF' || i.key === 'EF_MAN');
-  const otherItems = toSave.filter(i => i !== inrItem && i !== echoItem);
-
-  // Save INR separately
-  if (inrItem) {
-    DB.push('inr', { id: Date.now(), date: reportDate, value: inrItem.value, dose: '', lab: currentFileName, instruction: 'Auto-extracted from report' });
-    saved++;
-  }
-
-  // Save Echo EF as cardiac test
-  if (echoItem) {
-    DB.push('cardiac', { id: Date.now() + 1, date: reportDate, type: 'Echocardiogram (2D Echo)', ef: echoItem.value, hospital: '', doctor: '', findings: `EF: ${echoItem.value}% — extracted from ${currentFileName}`, recommendation: '' });
-    saved++;
-  }
-
-  // Group remaining items into one blood test record per category
-  if (otherItems.length > 0) {
-    const catGroups = {};
-    otherItems.forEach(item => {
-      const cat = item.category;
-      if (!catGroups[cat]) catGroups[cat] = [];
-      catGroups[cat].push(item);
-    });
-
-    const catLabels = { cbc: 'CBC (Complete Blood Count)', lft: 'LFT (Liver Function)', kft: 'KFT (Kidney Function)', lipid: 'Lipid Profile', thyroid: 'Thyroid Function', sugar: 'Blood Sugar / HbA1c', elec: 'Electrolytes', vitals: 'Vitals', cardiac: 'Cardiac Report' };
-    const catKeys = { cbc: 'CBC', lft: 'LFT', kft: 'KFT', lipid: 'Lipid', thyroid: 'Other', sugar: 'Other', elec: 'Other', vitals: 'Other', cardiac: 'Other' };
-
-    Object.entries(catGroups).forEach(([cat, items]) => {
-      const summary = items.map(i => `${i.label}: ${i.value} ${i.unit}`).join(' | ');
-      const typeLabel = catLabels[cat] || reportType;
-      const typeKey = catKeys[cat] || 'Other';
-      DB.push('bloodtests', { id: Date.now() + Math.random(), date: reportDate, type: typeLabel, typeKey, value: summary, lab: currentFileName, findings: `Auto-extracted from ${currentFileName}` });
-      saved++;
-    });
-  }
-
-  showToast(`✅ Saved ${saved} record(s) from report`);
-  clearExtracted();
-  renderAll();
-  drawINRChart();
-}
-
-function clearExtracted() {
-  extractedData = [];
-  document.getElementById('extractedResults').style.display = 'none';
-  document.getElementById('extractedGrid').innerHTML = '';
-}
 
 function handleFileSelect(e) {
   const file = e.target.files[0];
