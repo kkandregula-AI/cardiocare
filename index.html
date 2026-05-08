@@ -1193,37 +1193,37 @@ function triggerInstall() {
   <nav class="bottom-nav-wrap" id="bottomNav">
     <!-- Row 1: main sections -->
     <div class="bottom-nav-row">
-      <button class="nav-btn active" data-section="dashboard">
+      <button class="nav-btn active" data-section="dashboard" onclick="showSection('dashboard')">
         🏠<span class="nav-label">Home</span>
       </button>
-      <button class="nav-btn" data-section="inr">
+      <button class="nav-btn" data-section="inr" onclick="showSection('inr')">
         💉<span class="nav-label">INR</span>
       </button>
-      <button class="nav-btn" data-section="meds">
+      <button class="nav-btn" data-section="meds" onclick="showSection('meds')">
         💊<span class="nav-label">Meds</span>
       </button>
-      <button class="nav-btn" data-section="bloodtests">
+      <button class="nav-btn" data-section="bloodtests" onclick="showSection('bloodtests')">
         🩸<span class="nav-label">Blood</span>
       </button>
-      <button class="nav-btn" data-section="cardiac">
+      <button class="nav-btn" data-section="cardiac" onclick="showSection('cardiac')">
         🫀<span class="nav-label">Cardiac</span>
       </button>
     </div>
     <!-- Row 2: tools -->
     <div class="bottom-nav-row">
-      <button class="nav-btn" data-section="symptoms">
+      <button class="nav-btn" data-section="symptoms" onclick="showSection('symptoms')">
         📋<span class="nav-label">Log</span>
       </button>
-      <button class="nav-btn" data-section="schedule">
+      <button class="nav-btn" data-section="schedule" onclick="showSection('schedule')">
         📅<span class="nav-label">Schedule</span>
       </button>
-      <button class="nav-btn" data-section="upload">
+      <button class="nav-btn" data-section="upload" onclick="showSection('upload')">
         📤<span class="nav-label">Upload</span>
       </button>
-      <button class="nav-btn" data-section="aicare">
+      <button class="nav-btn" data-section="aicare" onclick="showSection('aicare')">
         🤖<span class="nav-label">AI Care</span>
       </button>
-      <button class="nav-btn" data-section="profile">
+      <button class="nav-btn" data-section="profile" onclick="showSection('profile')">
         👤<span class="nav-label">Profile</span>
       </button>
     </div>
@@ -1621,7 +1621,11 @@ if (!profile.inrLow) profile.inrLow = 2.0;
 if (!profile.inrHigh) profile.inrHigh = 2.75;
 
 // ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => { try {
+document.addEventListener('DOMContentLoaded', () => {
+  // Wire nav first — must run even if renderAll() throws
+  try { wireNavButtons(); } catch(e) { console.warn('wireNavButtons:', e); }
+  
+  try {
   const now = new Date();
   document.getElementById('headerDate').innerHTML = now.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
 
@@ -1661,7 +1665,7 @@ function showSection(id) {
   document.querySelectorAll(`.nav-btn[data-section="${id}"]`).forEach(b => b.classList.add('active'));
   // Scroll content back to top on section switch
   const content = document.querySelector('.content');
-  if (content) content.scrollTop = 0;
+  try { window.scrollTo(0,0); } catch(e){}
   if (id === 'inr') setTimeout(drawINRChart, 100);
   if (id === 'aicare') initAICareSection();
 }
@@ -1678,6 +1682,10 @@ function wireNavButtons() {
     btn.addEventListener('touchend', activate, {passive: false});
   });
 }
+
+// Re-wire after any dynamic DOM changes (safety net)
+setTimeout(function() { try { wireNavButtons(); } catch(e){} }, 300);
+setTimeout(function() { try { wireNavButtons(); } catch(e){} }, 1000);
 
 // ===== MODAL =====
 function openModal(id) {
@@ -2842,129 +2850,6 @@ function clearExtracted() {
   document.getElementById('extractedResults').style.display = 'none';
   document.getElementById('extractedGrid').innerHTML = '';
 }
-  // INR / PT
-  { key: 'INR', label: 'INR', unit: '', category: 'inr',
-    patterns: [/\bINR\b[\s:=\-–]+(\d+\.?\d*)/i, /PT[\s\/]+INR[\s:=\-–]+(\d+\.?\d*)/i, /International Normalised Ratio[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Hemoglobin
-  { key: 'HGB', label: 'Hemoglobin (Hb)', unit: 'g/dL', category: 'cbc',
-    patterns: [/Hemo?globin\b[\s:=\-–]+(\d+\.?\d*)/i, /\bHb\b[\s:=\-–]+(\d+\.?\d*)/i, /\bHGB\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // WBC / TLC
-  { key: 'WBC', label: 'WBC / TLC', unit: '×10³/µL', category: 'cbc',
-    patterns: [/(?:WBC|Total\s+Leuco|TLC)[\s:=\-–]+(\d+\.?\d*)/i, /(?:White Blood Cell|Leucocyte)[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Platelets
-  { key: 'PLT', label: 'Platelets', unit: '×10³/µL', category: 'cbc',
-    patterns: [/Platelet[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i, /\bPLT\b[\s:=\-–]+(\d+\.?\d*)/i, /\bPC\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // RBC
-  { key: 'RBC', label: 'RBC Count', unit: 'M/µL', category: 'cbc',
-    patterns: [/RBC[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i, /Red Blood Cell[\s\w]*Count[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // PCV / Hematocrit
-  { key: 'PCV', label: 'PCV / Hematocrit', unit: '%', category: 'cbc',
-    patterns: [/(?:PCV|Haematocrit|Hematocrit|HCT)\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // ESR
-  { key: 'ESR', label: 'ESR', unit: 'mm/hr', category: 'cbc',
-    patterns: [/\bESR\b[\s:=\-–]+(\d+\.?\d*)/i, /Erythrocyte Sed[\w\s]*Rate[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Serum Creatinine
-  { key: 'CREAT', label: 'Serum Creatinine', unit: 'mg/dL', category: 'kft',
-    patterns: [/Serum\s+Creatinine[\s:=\-–]+(\d+\.?\d*)/i, /\bCreatinine\b[\s:=\-–]+(\d+\.?\d*)/i, /\bS\.?Creatinine\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Blood Urea
-  { key: 'UREA', label: 'Blood Urea / BUN', unit: 'mg/dL', category: 'kft',
-    patterns: [/Blood\s+Urea[\s:=\-–]+(\d+\.?\d*)/i, /\bBUN\b[\s:=\-–]+(\d+\.?\d*)/i, /Serum\s+Urea[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Uric Acid
-  { key: 'URIC', label: 'Uric Acid', unit: 'mg/dL', category: 'kft',
-    patterns: [/Uric\s+Acid[\s:=\-–]+(\d+\.?\d*)/i, /\bUA\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // SGPT / ALT
-  { key: 'SGPT', label: 'SGPT / ALT', unit: 'U/L', category: 'lft',
-    patterns: [/(?:SGPT|ALT|Alanine[\s\w]*Transaminase)[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // SGOT / AST
-  { key: 'SGOT', label: 'SGOT / AST', unit: 'U/L', category: 'lft',
-    patterns: [/(?:SGOT|AST|Aspartate[\s\w]*Transaminase)[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Total Bilirubin
-  { key: 'TBIL', label: 'Total Bilirubin', unit: 'mg/dL', category: 'lft',
-    patterns: [/Total\s+Bilirubin[\s:=\-–]+(\d+\.?\d*)/i, /\bT\.?Bil\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Direct Bilirubin
-  { key: 'DBIL', label: 'Direct Bilirubin', unit: 'mg/dL', category: 'lft',
-    patterns: [/Direct\s+Bilirubin[\s:=\-–]+(\d+\.?\d*)/i, /\bD\.?Bil\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Alkaline Phosphatase
-  { key: 'ALP', label: 'Alk. Phosphatase (ALP)', unit: 'U/L', category: 'lft',
-    patterns: [/Alkaline\s+Phosphatase[\s:=\-–]+(\d+\.?\d*)/i, /\bALP\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Total Protein
-  { key: 'TPROT', label: 'Total Protein', unit: 'g/dL', category: 'lft',
-    patterns: [/Total\s+Protein[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Albumin
-  { key: 'ALB', label: 'Albumin', unit: 'g/dL', category: 'lft',
-    patterns: [/\bAlbumin\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Total Cholesterol
-  { key: 'TCHOL', label: 'Total Cholesterol', unit: 'mg/dL', category: 'lipid',
-    patterns: [/Total\s+Cholesterol[\s:=\-–]+(\d+\.?\d*)/i, /Cholesterol[\s,\-–:]+Total[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // LDL
-  { key: 'LDL', label: 'LDL Cholesterol', unit: 'mg/dL', category: 'lipid',
-    patterns: [/LDL[\s\-–\w]*Cholesterol[\s:=\-–]+(\d+\.?\d*)/i, /\bLDL\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // HDL
-  { key: 'HDL', label: 'HDL Cholesterol', unit: 'mg/dL', category: 'lipid',
-    patterns: [/HDL[\s\-–\w]*Cholesterol[\s:=\-–]+(\d+\.?\d*)/i, /\bHDL\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Triglycerides
-  { key: 'TGL', label: 'Triglycerides', unit: 'mg/dL', category: 'lipid',
-    patterns: [/Triglyceride[\s:=\-–]+(\d+\.?\d*)/i, /\bTGL\b[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Blood Sugar Fasting
-  { key: 'FBS', label: 'Blood Sugar Fasting', unit: 'mg/dL', category: 'sugar',
-    patterns: [/(?:Fasting|FBS|FPG)[\s\w]*(?:Blood\s+Sugar|Glucose)[\s:=\-–]+(\d+\.?\d*)/i, /Blood\s+Sugar[\s\w]*Fasting[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // HbA1c
-  { key: 'HBA1C', label: 'HbA1c', unit: '%', category: 'sugar',
-    patterns: [/HbA1?c[\s:=\-–]+(\d+\.?\d*)/i, /Glycated\s+Hemo[\s\w]*[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Sodium
-  { key: 'NA', label: 'Sodium (Na)', unit: 'mEq/L', category: 'elec',
-    patterns: [/\bSodium\b[\s:=\-–]+(\d+\.?\d*)/i, /\bNa\+?[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Potassium
-  { key: 'K', label: 'Potassium (K)', unit: 'mEq/L', category: 'elec',
-    patterns: [/\bPotassium\b[\s:=\-–]+(\d+\.?\d*)/i, /\bK\+?[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // TSH
-  { key: 'TSH', label: 'TSH', unit: 'µIU/mL', category: 'thyroid',
-    patterns: [/\bTSH\b[\s:=\-–]+(\d+\.?\d*)/i, /Thyroid Stimulating[\s\w]*[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // PT (Prothrombin Time)
-  { key: 'PT', label: 'PT (Prothrombin Time)', unit: 'sec', category: 'inr',
-    patterns: [/Prothrombin\s+Time[\s:=\-–]+(\d+\.?\d*)/i, /\bPT\b[\s:=\-–]+(\d+\.?\d*)\s*sec/i] },
-
-  // Echocardiogram EF
-  { key: 'EF', label: 'Echo — EF%', unit: '%', category: 'cardiac',
-    patterns: [/(?:EF|Ejection\s+Fraction)[\s:=\-–]+(\d+\.?\d*)\s*%?/i, /LVEF[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // Heart Rate / Pulse
-  { key: 'HR', label: 'Heart Rate', unit: 'bpm', category: 'cardiac',
-    patterns: [/(?:Heart\s+Rate|Pulse\s+Rate|HR)[\s:=\-–]+(\d+\.?\d*)/i] },
-
-  // BP Systolic
-  { key: 'SBP', label: 'BP Systolic', unit: 'mmHg', category: 'vitals',
-    patterns: [/(?:BP|Blood\s+Pressure)[\s:=\-–]+(\d{2,3})[\s\/]+\d{2,3}/i] },
-];
-
-
-
 function handleFileSelect(e) {
   const file = e.target.files[0];
   if (file) processReport(file);
