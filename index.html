@@ -2938,12 +2938,17 @@ async function generateDashboardPDF() {
     y += 14;
 
     // ---- SECTION: PATIENT PROFILE ----
-    const sectionHeader = (title, icon) => {
+    const sectionHeader = (title) => {
       checkY(14);
+      // Dark background band
       setFill(15, 35, 64);
       doc.rect(M, y, W - 2*M, 9, 'F');
+      // Teal left accent bar
+      doc.setFillColor(46, 196, 182);
+      doc.rect(M, y, 3, 9, 'F');
+      // Title text
       setFont(9, 'bold', [46, 196, 182]);
-      doc.text(icon + '  ' + title, M + 3, y + 6.5);
+      doc.text(title, M + 7, y + 6.5);
       y += 13;
     };
     const field = (label, value, x2=M+55, bold=false) => {
@@ -2967,7 +2972,7 @@ async function generateDashboardPDF() {
       y += 6;
     };
 
-    sectionHeader('PATIENT PROFILE', '👤');
+    sectionHeader('PATIENT PROFILE');
     twoCol('Name:', p.name || '—', 'Age:', p.age || '—');
     twoCol('Blood Group:', p.blood || '—', 'Weight:', p.weight ? p.weight + ' kg' : '—');
     twoCol('Cardiologist:', p.doctor || '—', 'Hospital:', p.hospital || '—');
@@ -2976,7 +2981,7 @@ async function generateDashboardPDF() {
     y += 3;
 
     // ---- SECTION: CURRENT MEDICATIONS ----
-    sectionHeader('CURRENT MEDICATIONS', '💊');
+    sectionHeader('CURRENT MEDICATIONS');
     // Acitrom
     const latestDose = medLog[0];
     checkY(8);
@@ -3009,7 +3014,7 @@ async function generateDashboardPDF() {
     y += 3;
 
     // ---- SECTION: INR READINGS ----
-    sectionHeader('INR READINGS (Most Recent)', '💉');
+    sectionHeader('INR READINGS (Most Recent)');
     if (inrData.length) {
       const latest = inrData[0];
       const lo = p.inrLow || 2.0, hi = p.inrHigh || 2.75;
@@ -3069,7 +3074,7 @@ async function generateDashboardPDF() {
 
     // ---- SECTION: CARDIAC TESTS ----
     checkY(20);
-    sectionHeader('CARDIAC TESTS — RECENT RESULTS', '🫀');
+    sectionHeader('CARDIAC TESTS — RECENT RESULTS');
     if (cardiacData.length) {
       cardiacData.slice(0, 4).forEach(r => {
         checkY(20);
@@ -3093,7 +3098,7 @@ async function generateDashboardPDF() {
 
     // ---- SECTION: RECENT BLOOD TESTS ----
     checkY(20);
-    sectionHeader('RECENT BLOOD TESTS — SYNOPSIS', '🩸');
+    sectionHeader('RECENT BLOOD TESTS — SYNOPSIS');
     if (bloodData.length) {
       bloodData.slice(0, 5).forEach(r => {
         checkY(12);
@@ -3114,7 +3119,7 @@ async function generateDashboardPDF() {
 
     // ---- SECTION: RECENT SYMPTOMS ----
     checkY(20);
-    sectionHeader('RECENT SYMPTOM LOG', '📋');
+    sectionHeader('RECENT SYMPTOM LOG');
     if (symData.length) {
       const feelings = ['','Very Unwell','Not well','Okay','Good','Excellent'];
       symData.slice(0, 4).forEach(r => {
