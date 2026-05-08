@@ -48,15 +48,14 @@
     --shadow: 0 4px 24px rgba(0,0,0,0.4);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; overflow: hidden; }
+  html, body { height: 100%; }
   body {
     font-family: 'DM Sans', sans-serif;
     background: var(--bg);
     color: var(--text);
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
   }
 
   /* ===== TOP HEADER ===== */
@@ -68,8 +67,9 @@
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
-    position: relative;
-    z-index: 10;
+    position: sticky;
+    top: 0;
+    z-index: 200;
   }
   .header-brand {
     display: flex;
@@ -95,70 +95,83 @@
 
   /* ===== MAIN LAYOUT ===== */
   .app-body {
-    display: flex;
     flex: 1;
-    overflow: hidden;
-  }
-
-  /* ===== SIDEBAR NAV ===== */
-  .sidebar {
-    width: 64px;
-    background: var(--bg2);
-    border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    padding: 12px 0;
-    gap: 4px;
-    flex-shrink: 0;
-    overflow-y: auto;
-    position: relative;
-    z-index: 5;
-  }
-  .nav-btn {
-    width: 48px; height: 48px;
-    border-radius: 12px;
-    border: none;
-    background: transparent;
-    color: var(--text3);
-    cursor: pointer;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 2px;
-    transition: all 0.2s;
-    font-size: 20px;
-    position: relative;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: rgba(46,196,182,0.15);
-    user-select: none;
-    -webkit-user-select: none;
-  }
-  .nav-btn span.nav-label { font-size: 8px; font-family: 'DM Sans', sans-serif; letter-spacing: 0.3px; }
-  .nav-btn:hover { background: var(--bg3); color: var(--text2); }
-  .nav-btn.active { background: rgba(46,196,182,0.12); color: var(--teal); }
-  .nav-btn.active::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 50%; transform: translateY(-50%);
-    width: 3px; height: 28px;
-    background: var(--teal);
-    border-radius: 0 4px 4px 0;
   }
 
   /* ===== CONTENT AREA ===== */
   .content {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 20px;
+    padding: 16px 16px 140px 16px;
     background: var(--bg);
-    position: relative;
-    z-index: 1;
-    isolation: isolate;
   }
   .content::-webkit-scrollbar { width: 4px; }
   .content::-webkit-scrollbar-track { background: transparent; }
   .content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .bottom-nav-wrap {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    z-index: 9999;
+  }
+  .bottom-nav-row {
+    display: flex;
+    height: 52px;
+  }
+  .bottom-nav-row + .bottom-nav-row {
+    border-top: 1px solid var(--border);
+  }
+  .nav-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text3);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 18px;
+    transition: background 0.15s, color 0.15s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(46,196,182,0.2);
+    user-select: none;
+    -webkit-user-select: none;
+    padding: 4px 2px;
+    min-width: 0;
+    position: relative;
+    cursor: pointer;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .nav-btn span.nav-label {
+    font-size: 9px;
+    font-family: 'DM Sans', sans-serif;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    pointer-events: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    padding: 0 2px;
+  }
+  .nav-btn:active { background: var(--bg3); }
+  .nav-btn.active { color: var(--teal); background: rgba(46,196,182,0.08); }
+  .nav-btn.active::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%;
+    height: 2px;
+    background: var(--teal);
+    border-radius: 0 0 3px 3px;
+    pointer-events: none;
+  }
 
   .section { display: none; }
   .section.active { display: block; }
@@ -403,6 +416,7 @@
     z-index: 1000;
     align-items: center; justify-content: center;
     padding: 20px;
+    touch-action: manipulation;
   }
   .modal-overlay.open { display: flex; }
   .modal {
@@ -585,12 +599,12 @@
   @media (max-width: 480px) {
     .form-grid { grid-template-columns: 1fr; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
-    .content { padding: 14px; }
+    .content { padding: 12px 12px 80px 12px; }
   }
 
   /* ===== NOTIFICATIONS ===== */
   .toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
     background: var(--card2); border: 1px solid var(--teal);
     color: var(--text); padding: 10px 20px;
     border-radius: 24px; font-size: 13px;
@@ -617,7 +631,7 @@
 </style>
 <script>
 // ===== PWA MANIFEST (inline) =====
-(function() {
+try { (function() {
   const manifest = {
   "name": "CardiaGuard — Heart Care Tracker",
   "short_name": "CardiaGuard",
@@ -636,7 +650,7 @@
   const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
   const url  = URL.createObjectURL(blob);
   document.getElementById('pwaManifest').setAttribute('href', url);
-})();
+})(); } catch(e) { console.log('PWA manifest skipped:', e.message); }
 
 // ===== SERVICE WORKER =====
 if ('serviceWorker' in navigator) {
@@ -658,9 +672,7 @@ self.addEventListener('fetch', e => {
 });`;
     const swBlob = new Blob([swCode], {type:'text/javascript'});
     const swUrl  = URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl)
-      .then(() => console.log('CardiaGuard SW registered'))
-      .catch(e => console.log('SW registration skipped:', e.message));
+    navigator.serviceWorker.register(swUrl).then(()=>console.log('SW ok')).catch(e=>console.log('SW skipped:',e.message));
   });
 }
 
@@ -687,7 +699,7 @@ function triggerInstall() {
 <body>
 
 <!-- INSTALL BANNER -->
-<div id="installBanner" style="display:none;align-items:center;justify-content:space-between;background:linear-gradient(90deg,#0e2a48,#122f54);border-bottom:1px solid rgba(232,180,90,0.3);padding:10px 16px;gap:10px;flex-shrink:0;z-index:20">
+<div id="installBanner" style="display:none;align-items:center;justify-content:space-between;background:linear-gradient(90deg,#0e2a48,#122f54);border-bottom:1px solid rgba(232,180,90,0.3);padding:10px 16px;gap:10px;flex-shrink:0;z-index:190;position:relative">
   <div style="display:flex;align-items:center;gap:10px">
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEnElEQVR42tVXb0wbZRz+XXs96AGlLaNF2pU/QaYbmFjUwLYSjQmripjWMU3FqGwuUacxBLMPTr9smcYszTIzExOcyeyKMVtxC/FPl/1xLpMtaQdUEseKpdCWtkB3Aj2g3F39sByU43pQtsX4frp739/7PM/9nt/73vsikGELd1ssQuNFjXZ7JnjI/SC9FzFIpuQN8pYRoXgnYdNlIgK5X8TrFYKsRs5H7DW3/c43r8JhNQgJ4ROBrJU8HWm6lipGSIToQZBz56Rica1F+SazE1JBerT4spjaALnsnW+cnV/hsBoa5C0j3LpYlgFWGdfzHi2+ApxLmG6c289ip2ZBlG6dC6Vdp9ebdHq9KdS03cRHvhYsllMklHo+cJ1ebxJ6T5cpFpObYRTW2erfNJ9in21u93phAE3n/b22lmOHll7MbStqwUnYdOFui0Uk5FeUJFekd8Tt7sqI/O4qSFsLIiGgphh0CaXf9sEBfDVyrogVFqzha8gMY/BMrBLBf9zQNazhxS86pwSTCse7+L6ctSNKkqa2DmsXD876BHBr4gqQJRiO+/lqIEGSJU0x8IO5bZnn6ch5BVQ4rAahXbA+Bn4nkDUyHHel9k+RZE1DDPxCpHy/a7So0W4Pd1ssTsKm49sLnq6WQWuDCh4rywEJisBwZB5+ukm4mnonjDgl+YUlP6zNd33XqoKqEhyyJAgEJhPg9sbh1KVx8AyTvGeEoka7XdCC3TtU8PErWogS89TXDtf5f4jxm0UFuQW7GmqaA5swW0Hn2FQOg8pOP6V2ndilgSiRoL456z4fi0V7ZTiW9WzdlhfOfvrIpif29QRiJKZddRWwyiocVsNDSgz279QAAMBv1z1nxiKRvguDilePXch968BJPy1F6emDaLCLxqi69peLF+MCY+G+i7cVzR3XlPvePh5UTZML88bK8HE2/dxfsijdUan5qz1foOK7ByZfcNLXG5IbIzPZ5RSDYBc984WtR4cQAIAvN8r+YOOGQxO+3pDcGJ7OrqAYBCNIseLx9/tRCs9bSHdiFnE7WIVyZk7Bjs3OJcjoTHZZKsB4PKv08t+FbxTkLblIzq6MY5KI2N3+7XWu94LL0EnYdEfx2juLW5sUwxO0iHeHm5ymFp+l2Utxlz/fAjpVFgAAfLIQ3Howfimwag2kKvuQ7AnQSaABAMo0G8oxMbNYyq89Uwid+ysBAODKn1NA0ckkAEBpcUEpG7encrchMBkfBQCo/P6zzbd8YSmf3WKuoiN2j6fdUl0NALOJxAKFouIqrVq5MW540rrwzt7D23bW3PhIE37+5K/ev9RYyNEXlNZAkp6rezRfolHLtTP1tUfm3917KCdJ5TZIxo3y5JyifzDQp1HJR6peP3cy44vJwFBoWzYm2aFRKzQiCSYaFctGfpxRnIl2nhj3Nb03SDysvwMAYOw//eJLyKhZo1ZqxRgqRiEZY2jG//NVz8ANz7CXYZI/dDhJ77quZrd8Yem13qG8YITASAaBuQ3Fs6Ht5tHY5q0TqbHy2y7lc1c7yoMRAqNoGsnPk9KTRNwLAAMAMNThJJn/3+X0QV/P/wVFNkaOwbqtdwAAAABJRU5ErkJggg==" width="28" height="28" style="border-radius:6px">
     <div>
@@ -716,39 +728,6 @@ function triggerInstall() {
 
 <!-- MAIN BODY -->
 <div class="app-body">
-  <!-- SIDEBAR -->
-  <nav class="sidebar">
-    <button class="nav-btn active" onclick="showSection('dashboard')" title="Dashboard">
-      🏠<span class="nav-label">Home</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('inr')" title="INR">
-      💉<span class="nav-label">INR</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('meds')" title="Medications">
-      💊<span class="nav-label">Meds</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('bloodtests')" title="Blood Tests">
-      🩸<span class="nav-label">Blood</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('cardiac')" title="Cardiac Tests">
-      🫀<span class="nav-label">Cardiac</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('symptoms')" title="Symptoms">
-      📋<span class="nav-label">Log</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('schedule')" title="Schedule">
-      📅<span class="nav-label">Schedule</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('upload')" title="Upload Reports">
-      📤<span class="nav-label">Upload</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('aicare')" title="AI Home Care">
-      🤖<span class="nav-label">AI Care</span>
-    </button>
-    <button class="nav-btn" onclick="showSection('profile')" title="Profile">
-      👤<span class="nav-label">Profile</span>
-    </button>
-  </nav>
 
   <!-- CONTENT -->
   <div class="content">
@@ -1209,6 +1188,47 @@ function triggerInstall() {
     </div>
 
   </div><!-- /content -->
+
+  <!-- ===== BOTTOM TAB BAR ===== -->
+  <nav class="bottom-nav-wrap" id="bottomNav">
+    <!-- Row 1: main sections -->
+    <div class="bottom-nav-row">
+      <button class="nav-btn active" data-section="dashboard">
+        🏠<span class="nav-label">Home</span>
+      </button>
+      <button class="nav-btn" data-section="inr">
+        💉<span class="nav-label">INR</span>
+      </button>
+      <button class="nav-btn" data-section="meds">
+        💊<span class="nav-label">Meds</span>
+      </button>
+      <button class="nav-btn" data-section="bloodtests">
+        🩸<span class="nav-label">Blood</span>
+      </button>
+      <button class="nav-btn" data-section="cardiac">
+        🫀<span class="nav-label">Cardiac</span>
+      </button>
+    </div>
+    <!-- Row 2: tools -->
+    <div class="bottom-nav-row">
+      <button class="nav-btn" data-section="symptoms">
+        📋<span class="nav-label">Log</span>
+      </button>
+      <button class="nav-btn" data-section="schedule">
+        📅<span class="nav-label">Schedule</span>
+      </button>
+      <button class="nav-btn" data-section="upload">
+        📤<span class="nav-label">Upload</span>
+      </button>
+      <button class="nav-btn" data-section="aicare">
+        🤖<span class="nav-label">AI Care</span>
+      </button>
+      <button class="nav-btn" data-section="profile">
+        👤<span class="nav-label">Profile</span>
+      </button>
+    </div>
+  </nav>
+
 </div><!-- /app-body -->
 
 <!-- ===== MODALS ===== -->
@@ -1601,7 +1621,7 @@ if (!profile.inrLow) profile.inrLow = 2.0;
 if (!profile.inrHigh) profile.inrHigh = 2.75;
 
 // ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => { try {
   const now = new Date();
   document.getElementById('headerDate').innerHTML = now.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
 
@@ -1611,6 +1631,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderAll();
   drawINRChart();
+  wireNavButtons();
+  } catch(e) { console.error('Init error:', e); }
 });
 
 function renderAll() {
@@ -1626,16 +1648,35 @@ function renderAll() {
 }
 
 // ===== NAV =====
+// ===== iOS IFRAME TOUCH UNLOCK =====
+// Forces iOS Safari inside iframes to fire click events
+document.addEventListener('touchstart', function(){}, {passive: true});
+document.body && (document.body.onclick = function(){});
+
 function showSection(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  const navBtns = document.querySelectorAll('.nav-btn');
-  const idx = ['dashboard','inr','meds','bloodtests','cardiac','symptoms','schedule','upload','aicare','profile'];
-  navBtns[idx.indexOf(id)].classList.add('active');
-
+  const sec = document.getElementById(id);
+  if (sec) sec.classList.add('active');
+  document.querySelectorAll(`.nav-btn[data-section="${id}"]`).forEach(b => b.classList.add('active'));
+  // Scroll content back to top on section switch
+  const content = document.querySelector('.content');
+  if (content) content.scrollTop = 0;
   if (id === 'inr') setTimeout(drawINRChart, 100);
   if (id === 'aicare') initAICareSection();
+}
+
+// ===== NAV BUTTON WIRING (click + touchend for max iOS compat) =====
+function wireNavButtons() {
+  document.querySelectorAll('.nav-btn[data-section]').forEach(function(btn) {
+    var sec = btn.getAttribute('data-section');
+    function activate(e) {
+      e.preventDefault();
+      showSection(sec);
+    }
+    btn.addEventListener('click',    activate, false);
+    btn.addEventListener('touchend', activate, {passive: false});
+  });
 }
 
 // ===== MODAL =====
@@ -2784,6 +2825,7 @@ function saveAllExtracted() {
   clearExtracted();
   renderAll();
   drawINRChart();
+  wireNavButtons();
   updateCardiacStats();
 
   // Navigate to the primary section of the report
